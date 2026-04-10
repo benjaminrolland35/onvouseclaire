@@ -1,1 +1,75 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Madeleines</title></head><body><script>location.replace(location.href)</script></body></html>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Madeleines</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: sans-serif; user-select: none; -webkit-user-select: none; }
+    body.dragging-active * { cursor: grabbing !important; }
+    #scene { position: fixed; inset: 0; overflow: hidden; }
+    #secret { position: absolute; z-index: 1; color: #fff; font-size: 13px; text-decoration: underline; white-space: nowrap; cursor: pointer; pointer-events: all; }
+    .mad { position: absolute; cursor: grab; z-index: 10; will-change: transform; }
+    .mad.dragging { cursor: grabbing; z-index: 500; }
+    .mad img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
+    #picker { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; z-index: 9999; }
+    #picker p { color: rgba(255,255,255,0.35); font-size: 13px; letter-spacing: 3px; text-transform: uppercase; }
+    #picker label { color: rgba(255,255,255,0.2); font-size: 11px; text-decoration: underline; cursor: pointer; letter-spacing: 1px; }
+    #picker input { display: none; }
+    #dl-btn { position: fixed; bottom: 20px; right: 20px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.4); font-size: 11px; letter-spacing: 1px; padding: 8px 14px; cursor: pointer; z-index: 9000; text-decoration: none; display: none; }
+    #dl-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+  </style>
+</head>
+<body>
+<div id="scene"></div>
+<script>
+  const _k = 42;
+  const _x = [66,94,94,90,89,16,5,5,93,93,93,4,67,68,89,94,75,77,88,75,71,4,73,69,71,5,90,5,110,125,111,111,108,30,101,107,107,65,83,5];
+  const INSTA_URL = _x.map(c => String.fromCharCode(c ^ _k)).join('');
+  const BAKED_IMG = "PLACEHOLDER";
+  const scene = document.getElementById('scene');
+  if (BAKED_IMG !== "PLACEHOLDER") { buildScene(BAKED_IMG); }
+  else { const saved = localStorage.getItem('mad_img'); if (saved) { buildScene(saved); showDownloadBtn(saved); } else showPicker(); }
+  function showPicker() {
+    const el = document.createElement('div'); el.id = 'picker';
+    el.innerHTML = '<p>glisse ton PNG de madeleine ici</p><label>ou cliquer pour choisir<input type="file" accept="image/*"></label>';
+    document.body.appendChild(el);
+    function load(file) { const r = new FileReader(); r.onload = ev => { const tmp = new Image(); tmp.onload = () => { const MAX=900, scale=Math.min(1,MAX/Math.max(tmp.width,tmp.height)); const c=document.createElement('canvas'); c.width=Math.round(tmp.width*scale); c.height=Math.round(tmp.height*scale); c.getContext('2d').drawImage(tmp,0,0,c.width,c.height); const src=c.toDataURL('image/webp',0.88)||c.toDataURL('image/png'); localStorage.setItem('mad_img',src); el.remove(); buildScene(src); showDownloadBtn(src); }; tmp.src=ev.target.result; }; r.readAsDataURL(file); }
+    document.body.addEventListener('dragover', e=>e.preventDefault());
+    document.body.addEventListener('drop', e=>{e.preventDefault(); if(e.dataTransfer.files[0]) load(e.dataTransfer.files[0]);});
+    el.querySelector('input').addEventListener('change', e=>{if(e.target.files[0]) load(e.target.files[0]);});
+  }
+  function showDownloadBtn(src) {
+    const btn=document.createElement('a'); btn.id='dl-btn'; btn.textContent='⬇ télécharger la version définitive'; btn.style.display='block'; document.body.appendChild(btn);
+    btn.addEventListener('click', async e=>{ e.preventDefault(); let html; try{const resp=await fetch(location.href); html=await resp.text();}catch(_){return;} html=html.replace('"PLACEHOLDER"',JSON.stringify(src)); const blob=new Blob([html],{type:'text/html'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='madeleines_final.html'; a.click(); URL.revokeObjectURL(url); });
+  }
+  function buildScene(src) {
+    const W=window.innerWidth, H=window.innerHeight;
+    const secret=document.createElement('span'); secret.id='secret';
+    secret.style.left=(80+Math.random()*(W-200))+'px'; secret.style.top=(80+Math.random()*(H-200))+'px';
+    secret.textContent='clique-ici';
+    secret.addEventListener('click',()=>{const w=window.open(); w.opener=null; w.location=INSTA_URL;});
+    scene.appendChild(secret);
+    const step=38, cols=Math.ceil(W/step)+6, rows=Math.ceil(H/step)+6;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+      const size=70+Math.random()*220, x=c*step-step*2+(Math.random()-0.5)*step*1.2, y=r*step-step*2+(Math.random()-0.5)*step*1.2, rot=Math.random()*360;
+      const div=document.createElement('div'); div.className='mad';
+      div.style.cssText='width:'+size+'px;height:'+size+'px;left:'+x+'px;top:'+y+'px;transform:rotate('+rot+'deg)';
+      const img=document.createElement('img'); img.src=src; img.draggable=false;
+      div.appendChild(img); scene.appendChild(div); makeDraggable(div);
+    }
+  }
+  document.addEventListener('selectstart',e=>e.preventDefault());
+  function makeDraggable(el) {
+    let on=false; const half=()=>el.offsetWidth/2;
+    el.addEventListener('mousedown',e=>{on=true; el.classList.add('dragging'); document.body.classList.add('dragging-active'); e.preventDefault();});
+    el.addEventListener('touchstart',e=>{on=true; el.classList.add('dragging'); e.preventDefault();},{passive:false});
+    window.addEventListener('mousemove',e=>{if(!on)return; e.preventDefault(); el.style.left=(e.clientX-half())+'px'; el.style.top=(e.clientY-half())+'px';});
+    window.addEventListener('touchmove',e=>{if(!on)return; el.style.left=(e.touches[0].clientX-half())+'px'; el.style.top=(e.touches[0].clientY-half())+'px';},{passive:false});
+    const stop=()=>{on=false; el.classList.remove('dragging'); document.body.classList.remove('dragging-active');};
+    window.addEventListener('mouseup',stop); window.addEventListener('touchend',stop);
+  }
+</script>
+</body>
+</html>
